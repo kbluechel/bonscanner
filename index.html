@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Bonscanner – Haushaltskosten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<style>
+  :root{
+    --paper:#F6F3EC;
+    --paper-dark:#EAE5D8;
+    --ink:#211C16;
+    --ink-soft:#6B6459;
+    --tanken:#C9622B;
+    --lebensmittel:#4C7A4F;
+    --essen:#B23A48;
+    --sonstiges:#4A5B7A;
+    --line: rgba(33,28,22,0.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper-dark);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(33,28,22,0.05) 1px, transparent 0);
+    background-size: 14px 14px;
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding: 24px 12px 60px;
+  }
+  .app{
+    width:100%;
+    max-width:460px;
+  }
+  header{
+    text-align:center;
+    margin-bottom:22px;
+  }
+  header .eyebrow{
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+  }
+  header h1{
+    font-family:'Space Mono',monospace;
+    font-size:26px;
+    margin:6px 0 0;
+    letter-spacing:-0.01em;
+  }
+  header h1 span{
+    background:var(--ink);
+    color:var(--paper);
+    padding:0 6px;
+  }
+
+  .receipt{
+    background:var(--paper);
+    border-radius:2px;
+    padding:20px 20px 24px;
+    box-shadow:0 1px 0 rgba(255,255,255,0.6) inset, 0 10px 24px -14px rgba(33,28,22,0.35);
+    position:relative;
+    margin-bottom:18px;
+  }
+  .receipt::after{
+    content:"";
+    position:absolute;
+    left:0;right:0;bottom:-9px;
+    height:18px;
+    background:
+      linear-gradient(-45deg, var(--paper) 8px, transparent 0),
+      linear-gradient(45deg, var(--paper) 8px, transparent 0);
+    background-size:16px 18px;
+    background-repeat:repeat-x;
+  }
+
+  label{
+    display:block;
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  select, input[type=text]{
+    width:100%;
+    font-family:'Inter',sans-serif;
+    font-size:15px;
+    padding:11px 12px;
+    border:1.5px solid var(--line);
+    border-radius:6px;
+    background:#fff;
+    color:var(--ink);
+    margin-bottom:16px;
+  }
+  select:focus, input:focus, button:focus{
+    outline:2px solid var(--ink);
+    outline-offset:1px;
+  }
+
+  .cat-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;}
+
+  .photo-btn{
+    width:100%;
+    padding:14px;
+    border:1.5px dashed var(--line);
+    border-radius:8px;
+    background:transparent;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    color:var(--ink);
+    cursor:pointer;
+    margin-bottom:16px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .photo-btn:active{background:var(--paper-dark);}
+  #fileInput{display:none;}
+
+  #preview{
+    width:100%;
+    border-radius:6px;
+    margin-bottom:14px;
+    display:none;
+    border:1px solid var(--line);
+  }
+
+  #status{
+    font-family:'Space Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-bottom:12px;
+    min-height:16px;
+  }
+
+  .fields{display:none;}
+  .primary-btn{
+    width:100%;
+    padding:13px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:6px;
+    font-family:'Space Mono',monospace;
+    font-weight:700;
+    font-size:14px;
+    letter-spacing:0.03em;
+    cursor:pointer;
+  }
+  .primary-btn:disabled{opacity:0.4;}
+
+  .totals-title{
+    font-family:'Space Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin:0 0 12px;
+  }
+  .cat-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:9px 0;
+    border-bottom:1px dashed var(--line);
+    font-family:'Space Mono',monospace;
+    font-size:14px;
+  }
+  .cat-row .name{display:flex;align-items:center;}
+  .grand-row{
+    display:flex;justify-content:space-between;
+    padding-top:14px;margin-top:6px;
+    font-family:'Space Mono',monospace;
+    font-weight:700;font-size:16px;
+    border-top:2px solid var(--ink);
+  }
+
+  .entries{margin-top:22px;}
+  .entry{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    padding:10px 0;
+    border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .entry .meta{color:var(--ink-soft);font-size:12px;margin-top:2px;}
+  .entry .amt{font-family:'Space Mono',monospace;font-weight:700;white-space:nowrap;margin-left:10px;}
+  .entry button{
+    background:none;border:none;color:var(--ink-soft);
+    font-size:12px;text-decoration:underline;cursor:pointer;padding:0;margin-top:4px;
+  }
+  .empty{color:var(--ink-soft);font-size:13px;text-align:center;padding:16px 0;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="eyebrow">Prototyp · v0.1</div>
+    <h1><span>Bon</span>scanner</h1>
+  </header>
+
+  <div class="receipt">
+    <label for="category">Kategorie</label>
+    <select id="category">
+      <option value="Tanken">⛽ Tanken</option>
+      <option value="Lebensmittel">🛒 Lebensmittel</option>
+      <option value="Essen gehen">🍽 Essen gehen</option>
+      <option value="Sonstiges">📎 Sonstiges</option>
+    </select>
+
+    <label>Kassenbon</label>
+    <button class="photo-btn" id="photoBtn">📷 Kassenbon fotografieren</button>
+    <input type="file" id="fileInput" accept="image/*" capture="environment">
+    <img id="preview" alt="Vorschau des Kassenbons">
+    <div id="status"></div>
+
+    <div class="fields" id="fields">
+      <label for="storeInput">Geschäft</label>
+      <input type="text" id="storeInput">
+      <label for="dateInput">Kaufdatum</label>
+      <input type="text" id="dateInput" placeholder="TT.MM.JJJJ">
+      <label for="amountInput">Betrag (€)</label>
+      <input type="text" id="amountInput" placeholder="0,00">
+      <button class="primary-btn" id="saveBtn">Buchung speichern</button>
+    </div>
+  </div>
+
+  <div class="receipt">
+    <div class="totals-title">Summen nach Kategorie</div>
+    <div id="totals"></div>
+    <div class="grand-row"><span>Gesamt</span><span id="grandTotal">0,00 €</span></div>
+  </div>
+
+  <div class="receipt entries">
+    <div class="totals-title">Letzte Buchungen</div>
+    <div id="entryList"></div>
+  </div>
+</div>
+
+<script>
+const CATS = {
+  "Tanken": "var(--tanken)",
+  "Lebensmittel": "var(--lebensmittel)",
+  "Essen gehen": "var(--essen)",
+  "Sonstiges": "var(--sonstiges)"
+};
+
+let entries = [];
+let pendingParsed = null;
+
+const fileInput = document.getElementById('fileInput');
+const photoBtn = document.getElementById('photoBtn');
+const preview = document.getElementById('preview');
+const statusEl = document.getElementById('status');
+const fieldsEl = document.getElementById('fields');
+const storeInput = document.getElementById('storeInput');
+const dateInput = document.getElementById('dateInput');
+const amountInput = document.getElementById('amountInput');
+const saveBtn = document.getElementById('saveBtn');
+const categorySelect = document.getElementById('category');
+
+photoBtn.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  fieldsEl.style.display = 'none';
+  statusEl.textContent = 'Bon wird gescannt …';
+
+  try {
+    const result = await Tesseract.recognize(file, 'deu', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          statusEl.textContent = `Bon wird gescannt … ${Math.round(m.progress * 100)}%`;
+        }
+      }
+    });
+    const text = result.data.text;
+    pendingParsed = parseReceipt(text);
+    storeInput.value = pendingParsed.store || '';
+    dateInput.value = pendingParsed.date || '';
+    amountInput.value = pendingParsed.amount || '';
+    fieldsEl.style.display = 'block';
+    statusEl.textContent = 'Fertig — bitte prüfen und ggf. korrigieren.';
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Scan fehlgeschlagen. Werte bitte manuell eintragen.';
+    fieldsEl.style.display = 'block';
+  }
+});
+
+function parseReceipt(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // Geschäft: erste sinnvolle Zeile (Buchstaben enthalten, keine reine Zahlenzeile)
+  const store = lines.find(l => /[A-Za-zÄÖÜäöüß]{3,}/.test(l) && !/summe|gesamt|beleg|steuer/i.test(l)) || '';
+
+  // Datum: TT.MM.JJJJ oder TT.MM.JJ oder mit "/"
+  const dateMatch = text.match(/(\d{1,2}[.\/]\d{1,2}[.\/]\d{2,4})/);
+  const date = dateMatch ? dateMatch[1] : '';
+
+  // Betrag: bevorzugt Zeile mit Summe/Gesamt/Total/zu zahlen, sonst größter Geldwert im Text
+  const totalLineMatch = text.match(/(?:summe|gesamt|total|zu zahlen|endbetrag)\D{0,12}(\d{1,4}[.,]\d{2})/i);
+  let amount = totalLineMatch ? totalLineMatch[1] : '';
+  if (!amount) {
+    const all = [...text.matchAll(/(\d{1,4}[.,]\d{2})/g)].map(m => m[1]);
+    if (all.length) {
+      amount = all.reduce((max, cur) => {
+        const numCur = parseFloat(cur.replace('.', '').replace(',', '.'));
+        const numMax = parseFloat(max.replace('.', '').replace(',', '.'));
+        return numCur > numMax ? cur : max;
+      });
+    }
+  }
+  amount = amount.replace('.', ',');
+
+  return { store, date, amount };
+}
+
+saveBtn.addEventListener('click', async () => {
+  const amountNum = parseFloat(amountInput.value.replace(',', '.'));
+  if (isNaN(amountNum) || amountNum <= 0) {
+    statusEl.textContent = 'Bitte einen gültigen Betrag eingeben.';
+    return;
+  }
+  const entry = {
+    id: Date.now().toString(),
+    category: categorySelect.value,
+    store: storeInput.value || 'Unbekannt',
+    date: dateInput.value || '',
+    amount: amountNum
+  };
+  entries.push(entry);
+  await persist();
+  render();
+  resetForm();
+});
+
+function resetForm() {
+  fileInput.value = '';
+  preview.style.display = 'none';
+  fieldsEl.style.display = 'none';
+  statusEl.textContent = 'Buchung gespeichert.';
+}
+
+async function persist() {
+  try {
+    const result = await window.storage.set('entries', JSON.stringify(entries), false);
+    if (!result) console.error('Speichern fehlgeschlagen');
+  } catch (err) {
+    console.error('Storage-Fehler beim Speichern:', err);
+  }
+}
+
+async function loadEntries() {
+  try {
+    const result = await window.storage.get('entries', false);
+    entries = result ? JSON.parse(result.value) : [];
+  } catch (err) {
+    entries = [];
+  }
+  render();
+}
+
+function deleteEntry(id) {
+  entries = entries.filter(e => e.id !== id);
+  persist();
+  render();
+}
+
+function formatEuro(n) {
+  return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+}
+
+function render() {
+  const totals = {};
+  Object.keys(CATS).forEach(c => totals[c] = 0);
+  entries.forEach(e => { totals[e.category] = (totals[e.category] || 0) + e.amount; });
+
+  const totalsEl = document.getElementById('totals');
+  totalsEl.innerHTML = Object.keys(CATS).map(c => `
+    <div class="cat-row">
+      <span class="name"><span class="cat-dot" style="background:${CATS[c]}"></span>${c}</span>
+      <span>${formatEuro(totals[c])}</span>
+    </div>
+  `).join('');
+
+  const grand = Object.values(totals).reduce((a, b) => a + b, 0);
+  document.getElementById('grandTotal').textContent = formatEuro(grand);
+
+  const listEl = document.getElementById('entryList');
+  if (entries.length === 0) {
+    listEl.innerHTML = '<div class="empty">Noch keine Buchungen.</div>';
+  } else {
+    listEl.innerHTML = [...entries].reverse().map(e => `
+      <div class="entry">
+        <div>
+          <div>${e.store}</div>
+          <div class="meta">${e.category} · ${e.date || 'ohne Datum'}</div>
+          <button onclick="deleteEntry('${e.id}')">Löschen</button>
+        </div>
+        <div class="amt">${formatEuro(e.amount)}</div>
+      </div>
+    `).join('');
+  }
+}
+
+loadEntries();
+</script>
+</body>
+</html>
